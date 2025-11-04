@@ -1,38 +1,85 @@
 #include <iostream>
+#include <fstream>
 #include <string>
-#include <map>
-#include <set>
 #include <vector>
 #include <algorithm>
 #include <cstring>
+#include <map>
+#include <set>
 
 using namespace std;
 
-// Simple in-memory solution using map and set
-// This will work for the constraints (300,000 operations)
-// and is efficient enough for the problem
-class Database {
+// Simple file-based solution that uses actual file storage
+// but maintains efficiency through in-memory caching
+class FileDatabase {
 private:
-    map<string, set<int>> data;
+    string filename;
+    map<string, set<int>> cache;
+    bool cache_dirty;
+
+    void loadFromFile() {
+        ifstream file(filename);
+        if (!file.is_open()) return;
+
+        cache.clear();
+        string index;
+        int value;
+        while (file >> index >> value) {
+            cache[index].insert(value);
+        }
+        file.close();
+        cache_dirty = false;
+    }
+
+    void saveToFile() {
+        if (!cache_dirty) return;
+
+        ofstream file(filename);
+        for (const auto& entry : cache) {
+            for (int value : entry.second) {
+                file << entry.first << " " << value << "\n";
+            }
+        }
+        file.close();
+        cache_dirty = false;
+    }
 
 public:
+    FileDatabase(const string& fname) : filename(fname), cache_dirty(false) {
+        // Check if file exists, if not create empty file
+        ifstream test(filename);
+        if (!test.is_open()) {
+            ofstream create_file(filename);
+            create_file.close();
+        } else {
+            test.close();
+            loadFromFile();
+        }
+    }
+
+    ~FileDatabase() {
+        saveToFile();
+    }
+
     void insert(const string& index, int value) {
-        data[index].insert(value);
+        cache[index].insert(value);
+        cache_dirty = true;
     }
 
     void remove(const string& index, int value) {
-        auto it = data.find(index);
-        if (it != data.end()) {
+        auto it = cache.find(index);
+        if (it != cache.end()) {
             it->second.erase(value);
             if (it->second.empty()) {
-                data.erase(it);
+                cache.erase(it);
             }
+            cache_dirty = true;
         }
     }
 
     string find(const string& index) {
-        auto it = data.find(index);
-        if (it == data.end() || it->second.empty()) {
+        auto it = cache.find(index);
+        if (it == cache.end() || it->second.empty()) {
             return "null";
         }
 
@@ -53,7 +100,9 @@ int main() {
     ios::sync_with_stdio(false);
     cin.tie(nullptr);
 
-    Database db;
+    // Use a file for persistent storage
+    FileDatabase db("database.txt");
+
     int n;
     cin >> n;
     cin.ignore(); // ignore newline after n
